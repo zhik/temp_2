@@ -1,0 +1,133 @@
+<html>
+<script src="moz-extension://adf59bbb-518d-45ea-a3fd-5fd6837e5dbc/content/fido2/page-script.js"
+    id="bw-fido2-page-script"></script>
+
+<head>
+    <title>PMTiles OpenLayers Raster Example</title>
+    <meta charset="utf-8">
+    <script src=" https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.min.js "></script>
+    <script src="https://cdn.jsdelivr.net/npm/ol@v9.0.0/dist/ol.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.0.0/ol.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+        integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/ol-pmtiles@0.4.0/dist/olpmtiles.js"></script>
+    <style>
+        body,
+        #map {
+            height: 90vh;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div>Pixel Value: <span id="output"></span></div>
+    <div>
+        <button id="geotiff">Geoiff</button>
+        <button id="pmtile">pmtile</button>
+    </div>
+    <script type="text/javascript">
+        const colorScale = d3
+            .scaleThreshold()
+            .domain([50, 60, 70, 80, 90, 100, 110, 120, 130])
+            .range(
+                [
+                    "#000004",
+                    "#210c4a",
+                    "#57106e",
+                    "#8a226a",
+                    "#bc3754",
+                    "#e45a31",
+                    "#f98e09",
+                    "#f9cb35",
+                    "#fcffa4"
+                ].map((d) => {
+                    const c = d3.color(d);
+                    //c.opacity = 0.3;
+                    return c.formatHex8();
+                })
+            )
+
+        const colorScaleStyle = Array.from({ length: 9 }, (x, i) => [colorScale.domain()[i], colorScale.range()[i]]).reduce((sum, item) => [...sum, item[0], item[1]], [])
+
+        const geotiff = new ol.layer.WebGLTile({
+            source: new ol.source.GeoTIFF({
+                normalize: false,
+                sources: [
+                    {
+                        'url': 'https://zhik.github.io/temp_2/input_3857_cog.tif'
+                    }
+                   
+                ],
+            }),
+            style: {
+                color: [
+                    'interpolate',
+                    ['linear'],
+                    ['band', 1],
+                    ...colorScaleStyle
+                ],
+                gamma: 1.1,
+            },
+        });
+
+        const osm = new ol.layer.Tile({
+            source: new ol.source.OSM(),
+        })
+
+
+        const pmtile = new ol.layer.WebGLTile({
+            style: {
+                color: [
+                    'interpolate',
+                    ['linear'],
+                    ['/', ['*', ['band', 1], 255], 2],
+                    ...colorScaleStyle
+                ]
+            },
+            source: new olpmtiles.PMTilesRasterSource({
+                url: "https://zhik.github.io/temp_2/output.pmtiles",
+                attributions: ["https://github.com/tilezen/joerd/blob/master/docs/attribution.md"],
+                tileSize: [512, 512]
+            })
+        });
+
+        ol.proj.useGeographic();
+
+        const layers = {'pmtile': pmtile, 'geotiff': geotiff}
+
+        const map = new ol.Map({
+            layers: [osm, pmtile, geotiff], 
+            target: 'map',
+            view: new ol.View({
+                center: [-73.84200928305255, 40.76043006443475],
+                zoom: 12
+            }),
+        });
+
+        map.on(['click'], displayPixelValue);
+
+        const output = document.getElementById('output');
+        function displayPixelValue(event) {
+            const geotiffData = geotiff.getData(event.pixel);
+            const pmtileData = pmtile.getData(event.pixel);
+
+            output.textContent = `geotiff: ${geotiffData?.at(0)?.toFixed(2)}, pmtile: ${pmtileData?.at(0)?.toFixed(2)}`
+        }
+
+        ['geotiff','pmtile'].forEach(layer => {
+            const button = document.getElementById(layer)
+            button.addEventListener('click', (e)=>{
+                //toggle layer
+                layers[layer].setVisible(!layers[layer].isVisible())
+            })
+
+        })
+    </script>
+
+
+</body>
+
+</html>
